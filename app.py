@@ -32,23 +32,25 @@ st.markdown(
     """
     <style>
     .metric-card {
-        background-color: #f8f9fa;
+        background-color: rgba(255, 255, 255, 0.04);
         padding: 22px;
         border-radius: 12px;
-        border: 1px solid #e6e6e6;
+        border: 1px solid rgba(255, 255, 255, 0.12);
         margin-bottom: 20px;
     }
+
     .section-card {
-        background-color: #ffffff;
+        background-color: rgba(255, 255, 255, 0.03);
         padding: 30px;
         border-radius: 14px;
-        border: 1px solid #e6e6e6;
+        border: 1px solid rgba(255, 255, 255, 0.10);
         margin-top: 35px;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
+
 
 # =====================================================
 # TITLE & SUBTITLE (CENTER-ALIGNED)
@@ -272,6 +274,7 @@ st.markdown(
     """
     <div class="section-card">
         <h2>Significance of the Yield Curve</h2>
+
         <p>
         The yield curve represents interest rates across different bond maturities
         and reflects market expectations for economic growth, inflation,
@@ -294,8 +297,6 @@ st.markdown(
         </ul>
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True   
 )
 
-# Footer
-st.caption("⚠️ Educational use only. Not financial advice.")
