@@ -99,37 +99,37 @@ prediction = model.predict(latest_features)[0]
 # =====================================================
 # LAYOUT (Plot | Insights | Spacer)
 # =====================================================
-left_col, mid_col, right_col = st.columns([5, 2, 1])
-
+plot_col, insight_col = st.columns([4, 1])
 
 # =====================================================
 # YIELD CURVE VISUALIZATION
 # =====================================================
-with left_col:
-    st.subheader("📊 Yield Curve: 2-Year vs 10-Year")
+with plot_col:
+    st.markdown("### Yield Curve Dynamics: 2-Year vs 10-Year Treasury")
 
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
         x=df.index,
         y=df["2Y"],
-        name="2Y Yield",
+        name="2Y Treasury Yield",
         line=dict(color="#1f77b4", width=3)
     ))
 
     fig.add_trace(go.Scatter(
         x=df.index,
         y=df["10Y"],
-        name="10Y Yield",
+        name="10Y Treasury Yield",
         line=dict(color="#d62728", width=3)
     ))
 
     fig.update_layout(
-        height=550,                 # 🔥 Increased height
-        margin=dict(l=40, r=40, t=60, b=40),
+        height=780,  # 🔥 BIG plot (this is the main fix)
+        margin=dict(l=40, r=40, t=80, b=40),
         xaxis_title="Date",
         yaxis_title="Yield (%)",
         hovermode="x unified",
+        template="plotly_white",
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -141,34 +141,49 @@ with left_col:
 
     st.plotly_chart(fig, use_container_width=True)
 
-
 # =====================================================
 # MODEL OUTPUT & SCENARIO ANALYSIS
 # =====================================================
 
-with mid_col:
-    st.subheader("🔮 Model Insight")
+with insight_col:
+    st.markdown("### Model Insights")
 
-    st.metric(
-        label="Predicted Next-Period 10Y Yield",
-        value=f"{prediction:.2f} %"
+    st.markdown(
+        f"""
+        **Predicted Next-Period 10Y Yield**  
+        <span style="font-size:32px; font-weight:600;">
+            {prediction:.2f} %
+        </span>
+        """,
+        unsafe_allow_html=True
     )
+
+    st.markdown("---")
 
     latest_spread = df["10Y"].iloc[-1] - df["2Y"].iloc[-1]
 
-    st.markdown("### 📌 Curve Signal")
-    if latest_spread < 0:
-        st.error("Yield Curve Inversion Detected")
-        st.caption("Historically associated with recession risk.")
-    elif latest_spread < 0.5:
-        st.warning("Flattening Yield Curve")
-        st.caption("Market uncertainty / late-cycle signal.")
-    else:
-        st.success("Normal Yield Curve")
-        st.caption("Typically associated with economic expansion.")
+    st.markdown("**Yield Curve Signal**")
 
-with right_col:
-    st.write("")
+    if latest_spread < 0:
+        signal = "Inverted"
+        interpretation = "Historically associated with elevated recession risk."
+    elif latest_spread < 0.5:
+        signal = "Flattening"
+        interpretation = "Late-cycle signal; markets pricing uncertainty."
+    else:
+        signal = "Normal"
+        interpretation = "Consistent with economic expansion expectations."
+
+    st.markdown(
+        f"""
+        **Current Regime:** {signal}  
+        <span style="color: gray; font-size: 14px;">
+        {interpretation}
+        </span>
+        """,
+        unsafe_allow_html=True
+    )
+
 
 # =====================================================
 # ECONOMIC EXPLANATION
