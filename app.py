@@ -9,209 +9,149 @@ from datetime import datetime
 # =====================================================
 # PAGE CONFIGURATION
 # =====================================================
-st.markdown(
-    """
-    <h1 style='text-align: center;'>📈 Yield Curve Predictor</h1>
-    <p style='text-align: center; font-size: 16px; color: gray;'>
-        Machine Learning–Driven Analysis of U.S. Treasury Yields
-    </p>
-    """,
-    unsafe_allow_html=True
+st.set_page_config(
+    page_title="Yield Curve Predictor",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
+# Custom CSS for a refined look
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    div[data-testid="stMetricValue"] { font-size: 28px; font-weight: 700; color: #1f77b4; }
+    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; font-weight: 600; }
+    </style>
+    """, unsafe_allow_html=True)
+
 # =====================================================
-# API KEY HANDLING (SECURE)
+# SIDEBAR & SETTINGS
 # =====================================================
-try:
-    fred = Fred(api_key=st.secrets["FRED_API_KEY"])
-except Exception:
-    st.error("❌ FRED API key not found. Please configure secrets.toml.")
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/2620/2620582.png", width=80)
+    st.title("Control Panel")
+    st.markdown("---")
+    
+    # Secure API Key Entry (If not in secrets)
+    api_key = st.text_input("FRED API Key", type="password", value=st.secrets.get("FRED_API_KEY", ""))
+    
+    st.info("This tool uses Random Forest Regressors to predict future Treasury yields based on historical spreads and volatility.")
+    
+    st.markdown("---")
+    st.caption("v2.1.0 | Data source: FRED")
+
+# Stop if no API key
+if not api_key:
+    st.error("Please enter a FRED API key in the sidebar or secrets.toml to proceed.")
     st.stop()
 
+fred = Fred(api_key=api_key)
+
 # =====================================================
-# DATA ACQUISITION (CACHED)
+# DATA & FEATURES (Optimized)
 # =====================================================
 @st.cache_data(ttl=3600)
-def fetch_yield_data():
-    maturities = {
-        "1M": "DGS1MO",
-        "3M": "DGS3MO",
-        "1Y": "DGS1",
-        "2Y": "DGS2",
-        "5Y": "DGS5",
-        "10Y": "DGS10",
-        "30Y": "DGS30"
-    }
-    
-    df = pd.DataFrame()
-    for name, code in maturities.items():
-        df[name] = fred.get_series(code)
-
+def fetch_and_process():
+    maturities = {"1M": "DGS1MO", "3M": "DGS3MO", "1Y": "DGS1", "2Y": "DGS2", "5Y": "DGS5", "10Y": "DGS10", "30Y": "DGS30"}
+    df = pd.DataFrame({name: fred.get_series(code) for name, code in maturities.items()})
     df.index = pd.to_datetime(df.index)
-    df = df.sort_index()
-    df = df.dropna()
-
-    return df
-
-df = fetch_yield_data()
-
-# =====================================================
-# FEATURE ENGINEERING
-# =====================================================
-def engineer_features(df):
-    df = df.copy()
-
-    # Yield spreads
+    df = df.sort_index().dropna()
+    
+    # Feature Engineering
     df['spread_10y_2y'] = df['10Y'] - df['2Y']
-    df['spread_5y_3m'] = df['5Y'] - df['3M']
-    df['spread_30y_10y'] = df['30Y'] - df['10Y']
-
-    # Rolling stats
     df['vol_30d'] = df['10Y'].rolling(30).std()
-    df['vol_90d'] = df['10Y'].rolling(90).std()
     df['ma_30'] = df['10Y'].rolling(30).mean()
-    df['ma_90'] = df['10Y'].rolling(90).mean()
-
-    # Lag features
-    for lag in [1, 5, 10]:
+    for lag in [1, 5]:
         df[f'10Y_lag_{lag}'] = df['10Y'].shift(lag)
-
     return df.dropna()
 
-df_feat = engineer_features(df)
+df_feat = fetch_and_process()
 
 # =====================================================
-# LOAD TRAINED MODEL
+# HEADER SECTION
 # =====================================================
+row0_1, row0_2 = st.columns([3, 1])
+with row0_1:
+    st.title("📈 Yield Curve Predictor")
+    st.subheader("Machine Learning Analysis of U.S. Treasury Yields")
+
+# =====================================================
+# METRIC CARDS
+# =====================================================
+curr_10y = df_feat["10Y"].iloc[-1]
+prev_10y = df_feat["10Y"].iloc[-2]
+curr_spread = df_feat["spread_10y_2y"].iloc[-1]
+
+# Prediction logic
 with open("random_forest_package.pkl", "rb") as f:
     model_package = pickle.load(f)
+prediction = model_package["model"].predict(df_feat[model_package["features"]].iloc[-1:])[0]
 
-# Extract model and feature list
-model = model_package["model"]
-feature_cols = model_package["features"]
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Current 10Y Yield", f"{curr_10y:.2f}%", f"{(curr_10y - prev_10y):.3f}")
+m2.metric("10Y-2Y Spread", f"{curr_spread:.2f}%")
+m3.metric("ML Predicted (Next)", f"{prediction:.2f}%", delta_color="off")
 
-# =====================================================
-# PREDICTION
-# =====================================================
-latest_features = df_feat[feature_cols].iloc[-1:]
-prediction = model.predict(latest_features)[0]
+# Curve Status Logic
+if curr_spread < 0:
+    status, color = "Inverted", "normal"
+elif curr_spread < 0.5:
+    status, color = "Flattening", "off"
+else:
+    status, color = "Healthy", "normal"
+m4.metric("Curve Status", status)
 
-# =====================================================
-# LAYOUT (Plot | Insights | Spacer)
-# =====================================================
-plot_col, insight_col = st.columns([4, 1])
-
-# =====================================================
-# YIELD CURVE VISUALIZATION
-# =====================================================
-with plot_col:
-    st.markdown("### Yield Curve Dynamics: 2-Year vs 10-Year Treasury")
-
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df["2Y"],
-        name="2Y Treasury Yield",
-        line=dict(color="#1f77b4", width=3)
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df["10Y"],
-        name="10Y Treasury Yield",
-        line=dict(color="#d62728", width=3)
-    ))
-
-    fig.update_layout(
-    height=820,  # 🔥 taller than before
-    margin=dict(l=10, r=20, t=70, b=40),  # 🔥 tighter left margin
-    xaxis_title="Date",
-    yaxis_title="Yield (%)",
-    hovermode="x unified",
-    template="plotly_white",
-    legend=dict(
-        orientation="h",
-        yanchor="bottom",
-        y=1.02,
-        xanchor="center",
-        x=0.5
-    )
-)
-
-
-    st.plotly_chart(fig, use_container_width=True)
+st.markdown("---")
 
 # =====================================================
-# MODEL OUTPUT & SCENARIO ANALYSIS
+# MAIN CONTENT TABS
 # =====================================================
+tab1, tab2, tab3 = st.tabs(["📊 Market Analysis", "🤖 Model Logic", "📘 Economic Guide"])
 
-with insight_col:
-    st.markdown(
-        """
-        <div style="padding-top: 60px;">
-            <h3 style="margin-bottom: 20px;">Model Insights</h3>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+with tab1:
+    col_chart, col_side = st.columns([3, 1])
+    
+    with col_chart:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df_feat.index, y=df_feat["2Y"], name="2Y Yield", line=dict(color="#94a3b8", width=1.5)))
+        fig.add_trace(go.Scatter(x=df_feat.index, y=df_feat["10Y"], name="10Y Yield", line=dict(color="#2563eb", width=2.5)))
+        
+        fig.update_layout(
+            height=500,
+            margin=dict(l=0, r=0, t=20, b=0),
+            hovermode="x unified",
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown(
-        f"""
-        <div style="font-size: 14px; color: gray;">Predicted Next-Period</div>
-        <div style="font-size: 34px; font-weight: 600; margin-bottom: 20px;">
-            {prediction:.2f} %
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    with col_side:
+        st.write("### Quick Insights")
+        st.info(f"**Signal:** {status}")
+        st.write(f"The current spread is **{curr_spread:.2f}**. Historically, a negative spread has preceded recessions by 12-18 months.")
+        st.write("**Recent Volatility:**")
+        st.line_chart(df_feat['vol_30d'].tail(20), height=150)
 
-    latest_spread = df["10Y"].iloc[-1] - df["2Y"].iloc[-1]
+with tab2:
+    st.write("### Feature Importance & Inputs")
+    st.write("The model analyzes the following features to generate the prediction:")
+    cols = st.columns(len(model_package["features"]))
+    for i, feature in enumerate(model_package["features"]):
+        cols[i].code(feature)
+    
+    st.divider()
+    st.write("### Raw Data Preview")
+    st.dataframe(df_feat.tail(10), use_container_width=True)
 
-    if latest_spread < 0:
-        signal = "Inverted Yield Curve"
-        interpretation = "Historically linked with higher recession probability."
-    elif latest_spread < 0.5:
-        signal = "Flattening Yield Curve"
-        interpretation = "Late-cycle signal; markets pricing uncertainty."
-    else:
-        signal = "Normal Yield Curve"
-        interpretation = "Typically observed during economic expansion."
+with tab3:
+    st.markdown("""
+    ### Why the Yield Curve Matters
+    The yield curve is often called the **'Crystal Ball of Capitalism.'** * **Normal Curve:** Long-term rates are higher than short-term rates. This indicates investors expect the economy to grow.
+    * **Inverted Curve:** Short-term rates are higher than long-term. This suggests investors are pessimistic about the future and is a classic **recession warning**.
+    
+    
+    """)
 
-    st.markdown(
-        f"""
-        <div style="margin-top: 30px;">
-            <div style="font-size: 14px; color: gray;">Curve Signal</div>
-            <div style="font-size: 18px; font-weight: 600;">
-                {signal}
-            </div>
-            <div style="font-size: 13px; color: gray; margin-top: 6px;">
-                {interpretation}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-# =====================================================
-# ECONOMIC EXPLANATION
-# =====================================================
-st.markdown("""
-## 📘 Significance of the Yield Curve
-
-The yield curve represents interest rates across different bond maturities.
-It reflects market expectations for economic growth, inflation, and monetary policy.
-
-### 🔴 Yield Curve Inversion
-When short-term rates exceed long-term rates (e.g., 2Y > 10Y), it is called an **inversion**.
-Historically, this has been one of the most reliable indicators of an upcoming recession.
-
-### 🏠 Impact on Daily Life
-- **Mortgage Rates:** Track long-term yields closely
-- **Corporate Borrowing:** Higher yields increase financing costs
-- **Savings Accounts:** Short-term rates affect deposit returns
-- **Inflation:** Reflected in long-term yield expectations
-""")
-
-st.caption("⚠️ Educational use only. Not financial advice.")
+st.caption("⚠️ Educational use only. Not financial advice. Data updated as of: " + datetime.now().strftime("%Y-%m-%d"))
