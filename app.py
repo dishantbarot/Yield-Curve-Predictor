@@ -270,9 +270,16 @@ with insight_col:
 # =====================================================
 # ECONOMIC EXPLANATION SECTION
 # =====================================================
-st.markdown(
+components.html(
     """
-    <div class="section-card">
+    <div style="
+        background-color: rgba(255,255,255,0.03);
+        padding: 30px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.10);
+        color: #e6e6e6;
+        font-family: sans-serif;
+    ">
         <h2>Significance of the Yield Curve</h2>
 
         <p>
@@ -297,6 +304,6 @@ st.markdown(
         </ul>
     </div>
     """,
-    unsafe_allow_html=True   
+    height=420
 )
 
