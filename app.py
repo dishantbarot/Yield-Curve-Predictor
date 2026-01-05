@@ -9,13 +9,15 @@ from datetime import datetime
 # =====================================================
 # PAGE CONFIGURATION
 # =====================================================
-st.set_page_config(
-    page_title="Yield Curve Predictor",
-    layout="wide"
+st.markdown(
+    """
+    <h1 style='text-align: center;'>📈 Yield Curve Predictor</h1>
+    <p style='text-align: center; font-size: 16px; color: gray;'>
+        Machine Learning–Driven Analysis of U.S. Treasury Yields
+    </p>
+    """,
+    unsafe_allow_html=True
 )
-
-st.title("📈 Yield Curve Predictor")
-st.caption("Machine Learning–Driven Analysis of U.S. Treasury Yields")
 
 # =====================================================
 # API KEY HANDLING (SECURE)
@@ -95,14 +97,15 @@ latest_features = df_feat[feature_cols].iloc[-1:]
 prediction = model.predict(latest_features)[0]
 
 # =====================================================
-# LAYOUT
+# LAYOUT (Plot | Insights | Spacer)
 # =====================================================
-col1, col2 = st.columns([2, 1])
+left_col, mid_col, right_col = st.columns([5, 2, 1])
+
 
 # =====================================================
 # YIELD CURVE VISUALIZATION
 # =====================================================
-with col1:
+with left_col:
     st.subheader("📊 Yield Curve: 2-Year vs 10-Year")
 
     fig = go.Figure()
@@ -111,28 +114,39 @@ with col1:
         x=df.index,
         y=df["2Y"],
         name="2Y Yield",
-        line=dict(color="blue")
+        line=dict(color="#1f77b4", width=3)
     ))
 
     fig.add_trace(go.Scatter(
         x=df.index,
         y=df["10Y"],
         name="10Y Yield",
-        line=dict(color="red")
+        line=dict(color="#d62728", width=3)
     ))
 
     fig.update_layout(
+        height=550,                 # 🔥 Increased height
+        margin=dict(l=40, r=40, t=60, b=40),
         xaxis_title="Date",
         yaxis_title="Yield (%)",
-        hovermode="x unified"
+        hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
+
 # =====================================================
 # MODEL OUTPUT & SCENARIO ANALYSIS
 # =====================================================
-with col2:
+
+with mid_col:
     st.subheader("🔮 Model Insight")
 
     st.metric(
@@ -140,6 +154,21 @@ with col2:
         value=f"{prediction:.2f} %"
     )
 
+    latest_spread = df["10Y"].iloc[-1] - df["2Y"].iloc[-1]
+
+    st.markdown("### 📌 Curve Signal")
+    if latest_spread < 0:
+        st.error("Yield Curve Inversion Detected")
+        st.caption("Historically associated with recession risk.")
+    elif latest_spread < 0.5:
+        st.warning("Flattening Yield Curve")
+        st.caption("Market uncertainty / late-cycle signal.")
+    else:
+        st.success("Normal Yield Curve")
+        st.caption("Typically associated with economic expansion.")
+
+with right_col:
+    st.write("")
 
 # =====================================================
 # ECONOMIC EXPLANATION
